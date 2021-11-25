@@ -23,13 +23,13 @@
 #### linux_x64
 linux 64位可通过如下命令获取可执行文件
 ```json
-curl -L -o es-pcstat es-pcstat-linux-x64
+curl -L -o es-pcstat https://github.com/zhangdapao995/es-pcstat/blob/main/other/es-pcstat-linux-x64
 chmod 755 es-pcstat
 ```
 #### mac
 mac 64位可通过如下命令获取可执行文件
 ```json
-curl -L -o es-pcstat es-pcstat-drawin-x64
+curl -L -o es-pcstat https://github.com/zhangdapao995/es-pcstat/blob/main/other/es-pcstat-drawin-x64
 chmod 755 es-pcstat
 ```
 其余环境需要自行编译
