@@ -51,19 +51,19 @@ func init() {
 }
 
 const (
-	ES_IP_FIELD           = "es.ip"
-	ES_PORT_FIELD         = "es.port"
-	ES_INDICES_PATH_FIELD = "es.indicesPath"
-	ES_NODE_NAME_FIELD    = "es.nodeName"
-	ES_CLUSTER_NAME       = "es.clusterName"
-
+	ES_IP_FIELD                        = "es.ip"
+	ES_PORT_FIELD                      = "es.port"
+	ES_INDICES_PATH_FIELD              = "es.indicesPath"
+	ES_NODE_NAME_FIELD                 = "es.nodeName"
+	ES_CLUSTER_NAME                    = "es.clusterName"
 	ES_COLLECTION_INDICES_PREFIX_FIELD = "es.collection.indicesPrefix"
-
-	OUTPUT_LOG_KEEP_LOG_NUM_FIELD = "output.log.keepLogNum"
-	OUTPUT_LOG_LOG_PATH_FIELD     = "output.log.logPath"
+	OUTPUT_LOG_KEEP_LOG_NUM_FIELD      = "output.log.keepLogNum"
+	OUTPUT_LOG_LOG_PATH_FIELD          = "output.log.logPath"
 
 	OUTPUT_ES_KEEP_INDEX_NUM_FIELD = "output.es.keepIndexNum"
 	OUTPUT_ES_PC_INDEX_NAME        = "output.es.pcIndexName"
+	ES_OUTPUT_PORT_FIELD           = "es.output.port"
+	ES_OUTPUT_IP_FIELD             = "es.output.ip"
 )
 
 // init log
@@ -92,6 +92,12 @@ func main() {
 	files := flag.Args()
 	config := initConfig(files[0])
 	client := initEsClient(config[ES_IP_FIELD], config[ES_PORT_FIELD], outputTypeFlag == ES)
+	out_client := client
+	if config[ES_OUTPUT_PORT_FIELD] == "" {
+		out_client = client
+	} else {
+		out_client = initEsClient(config[ES_OUTPUT_IP_FIELD], config[ES_OUTPUT_PORT_FIELD], outputTypeFlag == ES)
+	}
 	nodeName := config[ES_NODE_NAME_FIELD]
 	path := config[ES_INDICES_PATH_FIELD]
 	clusterName := config[ES_CLUSTER_NAME]
@@ -124,7 +130,7 @@ func main() {
 		indexStats := shardMap.Stats(path)
 
 		if outputTypeFlag == ES {
-			indexStats.WriteToEs(client, clusterName, nodeName, collectStart)
+			indexStats.WriteToEs(out_client, clusterName, nodeName, collectStart)
 		} else if outputTypeFlag == LOG {
 			indexStats.FormatForSLS(clusterName, nodeName, collectStart)
 		} else if outputTypeFlag == CONSOLE {
