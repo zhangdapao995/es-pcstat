@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"gopkg.in/olivere/elastic.v6"
+
 	log "github.com/sirupsen/logrus"
 )
 
@@ -201,7 +203,7 @@ func (indexStats *IndexStats) sort() {
 
 }
 
-func (indexStats IndexStats) WriteToEs(client Client, clusterName string, nodeName string, createdTime time.Time) {
+func (indexStats IndexStats) WriteToEs(client elastic.Client, clusterName string, nodeName string, createdTime time.Time) {
 	docs := indexStats.getStatDocs(clusterName, nodeName, createdTime)
 
 	PostPcstatData(client, docs)

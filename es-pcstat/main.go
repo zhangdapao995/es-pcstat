@@ -27,13 +27,15 @@ import (
 	"es-pcstat/es-collect"
 	"flag"
 	"fmt"
-	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
-	log "github.com/sirupsen/logrus"
 	"io"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
+	log "github.com/sirupsen/logrus"
+	"gopkg.in/olivere/elastic.v6"
 )
 
 var (
@@ -56,6 +58,8 @@ const (
 	ES_INDICES_PATH_FIELD = "es.indicesPath"
 	ES_NODE_NAME_FIELD    = "es.nodeName"
 	ES_CLUSTER_NAME       = "es.clusterName"
+	ES_USER               = "es.user"
+	ES_PASSWORD           = "es.password"
 
 	ES_COLLECTION_INDICES_PREFIX_FIELD = "es.collection.indicesPrefix"
 
@@ -64,6 +68,10 @@ const (
 
 	OUTPUT_ES_KEEP_INDEX_NUM_FIELD = "output.es.keepIndexNum"
 	OUTPUT_ES_PC_INDEX_NAME        = "output.es.pcIndexName"
+	OUTPUT_ES_USER                 = "output.es.user"
+	OUTPUT_ES_PASSWORD             = "output.es.password"
+	OUTPUT_ES_IP_FIELD             = "output.es.ip"
+	OUTPUT_ES_PORT_FIELD           = "output.es.port"
 )
 
 // init log
@@ -91,7 +99,8 @@ func main() {
 	flag.Parse()
 	files := flag.Args()
 	config := initConfig(files[0])
-	client := initEsClient(config[ES_IP_FIELD], config[ES_PORT_FIELD], outputTypeFlag == ES)
+	//	fmt.Printf("user,%s;password,%s", config[ES_USER], config[ES_PASSWORD])
+	client := initEsClient(config[ES_IP_FIELD], config[ES_PORT_FIELD], config[ES_USER], config[ES_PASSWORD])
 	nodeName := config[ES_NODE_NAME_FIELD]
 	path := config[ES_INDICES_PATH_FIELD]
 	clusterName := config[ES_CLUSTER_NAME]
@@ -124,7 +133,13 @@ func main() {
 		indexStats := shardMap.Stats(path)
 
 		if outputTypeFlag == ES {
-			indexStats.WriteToEs(client, clusterName, nodeName, collectStart)
+			var outputclient elastic.Client
+			if config[OUTPUT_ES_USER] == "" || config[OUTPUT_ES_PASSWORD] == "" || config[OUTPUT_ES_IP_FIELD] == "" || config[OUTPUT_ES_PORT_FIELD] == "" {
+				outputclient = es_collect.OutputClient(config[ES_IP_FIELD], config[ES_PORT_FIELD], config[ES_USER], config[ES_PASSWORD])
+			} else {
+				outputclient = es_collect.OutputClient(config[OUTPUT_ES_IP_FIELD], config[OUTPUT_ES_PORT_FIELD], config[OUTPUT_ES_USER], config[OUTPUT_ES_PASSWORD])
+			}
+			indexStats.WriteToEs(outputclient, clusterName, nodeName, collectStart)
 		} else if outputTypeFlag == LOG {
 			indexStats.FormatForSLS(clusterName, nodeName, collectStart)
 		} else if outputTypeFlag == CONSOLE {
@@ -151,8 +166,8 @@ func waitToNextCollect(collectStart time.Time, collectIntervalFlag int) {
 	}
 }
 
-func initEsClient(ip string, port string, initEsClient bool) es_collect.Client {
-	client := es_collect.NewClient(ip, port, initEsClient)
+func initEsClient(ip string, port string, user string, password string) es_collect.Client {
+	client := es_collect.CollectClient(ip, port, user, password)
 	return *client
 }
 

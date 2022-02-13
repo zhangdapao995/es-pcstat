@@ -2,14 +2,16 @@ package es_collect
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
-	"gopkg.in/olivere/elastic.v6"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	"gopkg.in/olivere/elastic.v6"
 )
 
 var PCSTAT_INDEX_NAME = "pc_stat"
@@ -43,37 +45,42 @@ var mapping = `
 
 //es client for get shards or indices and more
 type Client struct {
-	Ip   string
-	Port string
-
-	client elastic.Client
+	Ip       string
+	Port     string
+	User     string
+	Password string
 }
 
-func NewClient(ip string, port string, initEsClient bool) *Client {
+func CollectClient(ip string, port string, user string, password string) *Client {
 	instance := new(Client)
 	instance.Ip = ip
 	instance.Port = port
-	if initEsClient {
-		url := "http://" + ip + ":" + port + "/"
-		client, err := elastic.NewClient(
-			elastic.SetURL(url),
-			elastic.SetSniff(false),
-			elastic.SetHealthcheckInterval(10*time.Second),
-			elastic.SetGzip(true),
-			elastic.SetErrorLog(log.New(os.Stderr, "ELASTIC ", log.LstdFlags)),
-			elastic.SetInfoLog(log.New(os.Stdout, "", log.LstdFlags)))
-		if err != nil {
-			panic(err)
-		}
-
-		instance.client = *client
-	}
+	instance.User = user
+	instance.Password = password
 	return instance
+}
+
+func OutputClient(ip string, port string, user string, password string) elastic.Client {
+	url := "http://" + ip + ":" + port + "/"
+	client, err := elastic.NewClient(
+		elastic.SetURL(url),
+		elastic.SetSniff(false),
+		elastic.SetHealthcheckInterval(10*time.Second),
+		elastic.SetBasicAuth(user, password),
+		elastic.SetGzip(true),
+		elastic.SetErrorLog(log.New(os.Stderr, "ELASTIC ", log.LstdFlags)),
+		elastic.SetInfoLog(log.New(os.Stdout, "", log.LstdFlags)))
+	if err != nil {
+		panic(err)
+	}
+
+	return *client
+
 }
 
 func GetShardMap(client Client) ShardMap {
 	url := "http://" + client.Ip + ":" + client.Port + "/_cat/shards?h=state,index,shard,node,prirep"
-	body, err := httpGetRequest(url)
+	body, err := httpGetRequest(url, client.User, client.Password)
 	if err != nil {
 		log.Printf("get indices error,%v", err)
 	}
@@ -104,7 +111,7 @@ func GetShardMap(client Client) ShardMap {
 
 func GetIndiceMap(client Client, indicesPrefix []string) IndexMap {
 	url := "http://" + client.Ip + ":" + client.Port + "/_cat/indices?h=index,uuid"
-	body, err := httpGetRequest(url)
+	body, err := httpGetRequest(url, client.User, client.Password)
 	if err != nil {
 		log.Printf("get indices error,%v", err)
 	}
@@ -192,8 +199,8 @@ func initPcstatIndex(esClient elastic.Client, indexPrefix string) (string, error
 	return realIndex, nil
 }
 
-func PostPcstatData(client Client, docs []PageCacheDoc) {
-	esClient := client.client
+func PostPcstatData(client elastic.Client, docs []PageCacheDoc) {
+	esClient := client
 	indexName, error := initPcstatIndex(esClient, PCSTAT_INDEX_NAME)
 	if error != nil {
 		fmt.Printf("create index error, skip bulk data, %s\n", error)
@@ -224,8 +231,21 @@ func PostPcstatData(client Client, docs []PageCacheDoc) {
 	}
 }
 
-func httpGetRequest(url string) (string, error) {
-	resp, err := http.Get(url)
+func httpGetRequest(url string, user string, password string) (string, error) {
+	rep, err := http.NewRequest("GET", url, nil)
+	// req.Header.Set("X-Custom-Header", "myvalue")
+	if err != nil {
+		fmt.Println("req err:")
+		panic(err)
+	}
+	//设置用户密码和跳过tls
+	rep.SetBasicAuth(user, password)
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{Timeout: 30 * time.Second, Transport: tr}
+	//获取结果
+	resp, err := client.Do(rep)
 	if err != nil {
 		return "", err
 	}
